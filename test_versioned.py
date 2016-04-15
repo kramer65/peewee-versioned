@@ -4,7 +4,7 @@ import os
 import inspect
 
 from peewee import CharField, DateField, BooleanField, SqliteDatabase
-from versioned import VersionedModel
+from peewee_versioned import VersionedModel
 
 sqlite_database = SqliteDatabase(':memory:')
 

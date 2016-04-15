@@ -11,4 +11,5 @@ setup(
         'peewee',
         'six'
     ],
+    py_modules = ['peewee_versioned']
 )
