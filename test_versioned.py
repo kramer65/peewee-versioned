@@ -200,6 +200,43 @@ class TestVersionedModel(unittest.TestCase):
         # 1 -> 2 -> 1 -> 2 == 4
         self.assertEqual(self.person.version_id, 4)
 
+    def test_revert_negative_index(self):
+        version_1 = self.person_kwargs
+        version_2 = version_1.copy()
+        version_2['name'] = 'new_name2'
+        version_3 = version_1.copy()
+        version_3['name'] = 'new_name3'
+        version_4 = version_1.copy()
+        version_4['name'] = 'new_name4'
+
+        version_fields = (version_1, version_2, version_3, version_4)
+
+        new_versions = version_fields[1:]
+
+        # first make a change
+        for version in new_versions:
+            for field, value in version.items():
+                setattr(self.person, field, value)
+            self.person.save()
+
+            # make sure the change is saved
+            for field, value in version.items():
+                self.assertEqual(getattr(self.person, field), value)
+
+        # make the reversions and check they match
+        for version_field in version_fields:
+            self.person.revert(-4)
+            for field, value in version_field.items():
+                self.assertEqual(getattr(self.person, field), value)
+
+        # check we are actually at version 8
+        # 1 -> 2 -> -> 3 -> 4 -> 1 -> 2 -> 3 -> 4 == 8
+        self.assertEqual(self.person.version_id, 8)
+
+        # try to revert all the way back to version 2
+        self.person.revert(-7)
+        for field, value in version_2.items():
+            self.assertEqual(getattr(self.person, field), value)
 
 
 if __name__ == '__main__':
