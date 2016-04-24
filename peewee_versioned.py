@@ -16,9 +16,9 @@ class MetaModel(BaseModel):
     '''
 
     # These fields will be added to the nested ``VersionModel``
-    _version_fields = {'valid_from': DateTimeField(default=datetime.datetime.now, index=True),
-                       'valid_until': DateTimeField(null=True, default=None,),
-                       'deleted': BooleanField(default=False),
+    _version_fields = {'_valid_from': DateTimeField(default=datetime.datetime.now, index=True),
+                       '_valid_until': DateTimeField(null=True, default=None,),
+                       '_deleted': BooleanField(default=False),
                        '_original_record_id': None,  # ForeignKeyField. Added later.
                        '_version_id': IntegerField(default=1),
                        '_id': IntegerField(primary_key=True)}  # Make an explicit primary key
@@ -124,7 +124,7 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
 
             # create a new version initialized to current values
             new_version = self._create_new_version(save=False)
-            new_version.deleted = True
+            new_version._deleted = True
             new_version.save()
 
             # delete the parent
@@ -185,7 +185,7 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
         else:  # version < 0
             version_model = (self._versions
                              .order_by(VersionModel._version_id.desc())
-                             .offset(-version - 1)
+                             .offset(-version)
                              .limit(1))[0]
 
         fields_to_copy = self._get_fields_to_copy()
@@ -241,7 +241,7 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
         VersionModel = self._get_version_model()
         try:
             current_version = (self._versions.select()
-                               .where(VersionModel.valid_until.is_null())
+                               .where(VersionModel._valid_until.is_null())
                                )  # null record
             assert(len(current_version) == 1)
             return current_version[0]
@@ -258,6 +258,5 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
     def _finalize_current_version(self):
         current_version = self._get_current_version()
         if current_version is not None:
-            now = datetime.datetime.now()
-            current_version.valid_until = now
+            current_version._valid_until = datetime.datetime.now()
             current_version.save()
