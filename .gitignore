@@ -6,3 +6,5 @@ env
 *.egg-info/
 *.egg
 build/
+.cache/
+.tox/
