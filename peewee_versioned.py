@@ -23,13 +23,10 @@ class MetaModel(BaseModel):
                        '_version_id': IntegerField(default=1),
                        '_id': IntegerField(primary_key=True)}  # Make an explicit primary key
 
-    # Attribute of the parent class where the ``VersionModel`` can be accesed: Parent._VersionModel
+    # Attribute of the parent class where the ``VersionModel`` can be accessed: Parent._VersionModel
     _version_model_attr_name = '_VersionModel'
-
     _version_model_name_suffix = 'Version'  # Example, People -> PeopleVersion
-
     _version_model_related_name = '_versions'  # Example People._versions.get()
-
     _RECURSION_BREAK_TEST = object()
 
     def __new__(self, name, bases, attrs):
@@ -43,7 +40,6 @@ class MetaModel(BaseModel):
             setattr(VersionModel, self._version_model_attr_name, None)
             return VersionModel
 
-        # This is not our nested ``VersionModel`` class
         # Create the class, create the nested ``VersionModel``, link them together.
         for field in attrs.keys():
             if (field in self._version_fields or
@@ -51,7 +47,7 @@ class MetaModel(BaseModel):
                 raise ValueError('You can not declare the attribute {}. '
                                  'It is automatically created by VersionedModel'.format(field))
 
-        # Create the new class that has this class as it's metaclass
+        # Create the top level ``VersionedModel`` class
         new_class = super(MetaModel, self).__new__(self, name, bases, attrs)
 
         # Mung up the attributes for our ``VersionModel``
@@ -63,7 +59,7 @@ class MetaModel(BaseModel):
         # needed to avoid infinite recursion
         version_model_attrs['_RECURSION_BREAK_TEST'] = self._RECURSION_BREAK_TEST
 
-        # Create a new `*Version`` class that inherits from new_class
+        # Create the nested ``VersionedModel`` class that inherits from the top level new_class
         VersionModel = type(name + self._version_model_name_suffix,  # Name
                             (new_class,),  # bases
                             version_model_attrs)  # attributes
@@ -170,8 +166,13 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
         Changes all attributes to match what was saved in ``version``
         This, in itself creates a new version.
 
-        :param version: May be of type int, or an instance of the ``VersionModel``
-
+        :param version:
+          * type ``VersionModel`` match the passed in ``version``
+          * type int
+            * positive: ``version`` matches ``VersionModel._version_id``
+            * negative: negative indexing on ``version``:
+              -1 matches the previous version,
+              -2 matches two versions ago etc.
         '''
         if self._is_version_model():
             raise RuntimeError('method revert can not be called on a VersionModel')
@@ -179,8 +180,13 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
         VersionModel = self._get_version_model()
         if isinstance(version, VersionModel):
             version_model = version
-        else:
+        elif version >= 0:
             version_model = self._versions.filter(VersionModel._version_id == version).get()
+        else:  # version < 0
+            version_model = (self._versions
+                             .order_by(VersionModel._version_id.desc())
+                             .offset(-version - 1)
+                             .limit(1))[0]
 
         fields_to_copy = self._get_fields_to_copy()
         for field in fields_to_copy:
