@@ -73,7 +73,6 @@ The best is still to come though. Let's say that we decide Mike is not so Mighty
 As you can see we successfully reverted back a version. Note though, that this adds a new version to the versions table with `_version_id` 4, which is essentially a copy of version 2. This might seem redundant, but for every version we also store from and until which moment in time they were in use. To not mess up this information we always create a new version, even if we revert.
 
 Now let's see how all the previous versions look:
-
     
     >>> for version in person._versions:
             pprint(vars(version))
@@ -221,6 +220,7 @@ the model history will not be saved. The dangerous commands I've noticed from te
     * .insert_many()
     * .delete()  # class level
 
+All datetimes in `_valid_from` and `_valid_until` are in UTC. 
 
 ## Testing
 

@@ -16,7 +16,7 @@ class MetaModel(BaseModel):
     '''
 
     # These fields will be added to the nested ``VersionModel``
-    _version_fields = {'_valid_from': DateTimeField(default=datetime.datetime.now, index=True),
+    _version_fields = {'_valid_from': DateTimeField(default=datetime.datetime.utcnow, index=True),
                        '_valid_until': DateTimeField(null=True, default=None,),
                        '_deleted': BooleanField(default=False),
                        '_original_record_id': None,  # ForeignKeyField. Added later.
@@ -258,5 +258,5 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
     def _finalize_current_version(self):
         current_version = self._get_current_version()
         if current_version is not None:
-            current_version._valid_until = datetime.datetime.now()
+            current_version._valid_until = datetime.datetime.utcnow()
             current_version.save()
