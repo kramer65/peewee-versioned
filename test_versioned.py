@@ -3,19 +3,19 @@ import datetime
 import os
 import inspect
 
-from peewee import CharField, DateField, BooleanField, SqliteDatabase
+from peewee import CharField, DateField, BooleanField, ForeignKeyField, SqliteDatabase
 from peewee_versioned import VersionedModel
 
 sqlite_database = SqliteDatabase(':memory:')
 
 
 # Basic example class
-class People(VersionedModel):
+class BaseClass(VersionedModel):
     class Meta:
         database = sqlite_database
 
 
-class Person(People):
+class Person(BaseClass):
     name = CharField()
     birthday = DateField()
     is_relative = BooleanField()
@@ -237,6 +237,34 @@ class TestVersionedModel(unittest.TestCase):
         self.person.revert(-6)
         for field, value in version_2.items():
             self.assertEqual(getattr(self.person, field), value)
+
+
+class School(BaseClass):
+    name = CharField()
+
+
+class Student(BaseClass):
+    name = CharField()
+    school = ForeignKeyField(School, related_name='students')
+
+
+class TestRelations(unittest.TestCase):
+    def setUp(self):
+        School.create_table()
+        Person.create_table()
+
+    def tearDown(self):
+        Person.drop_table()
+
+    def test_basic_relation(self):
+        self.school = School()
+        self.school.name = 'Montessori School'
+        self.school.save()
+
+        self.student = Student()
+        self.student.name = 'Johnny Blue'
+        self.student.school = self.school
+        self.student.save()
 
 
 if __name__ == '__main__':
