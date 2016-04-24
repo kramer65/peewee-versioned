@@ -40,7 +40,6 @@ class MetaModel(BaseModel):
             setattr(VersionModel, self._version_model_attr_name, None)
             return VersionModel
 
-        # This is the nested ``VersionModel`` class
         # Create the class, create the nested ``VersionModel``, link them together.
         for field in attrs.keys():
             if (field in self._version_fields or
