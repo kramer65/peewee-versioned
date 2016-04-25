@@ -3,19 +3,19 @@ import datetime
 import os
 import inspect
 
-from peewee import CharField, DateField, BooleanField, SqliteDatabase
+from peewee import CharField, DateField, BooleanField, ForeignKeyField, SqliteDatabase
 from peewee_versioned import VersionedModel
 
 sqlite_database = SqliteDatabase(':memory:')
 
 
 # Basic example class
-class People(VersionedModel):
+class BaseClass(VersionedModel):
     class Meta:
         database = sqlite_database
 
 
-class Person(People):
+class Person(BaseClass):
     name = CharField()
     birthday = DateField()
     is_relative = BooleanField()
@@ -74,16 +74,16 @@ class TestVersionedModel(unittest.TestCase):
 
     def test_newly_created_model_should_have_deleted_false(self):
         current_version = self.person._get_current_version()
-        self.assertFalse(current_version.deleted)
+        self.assertFalse(current_version._deleted)
 
     def test_newly_created_version_model_should_have_valid_until_null(self):
         current_version = self.person._get_current_version()
-        self.assertIsNone(current_version.valid_until)
+        self.assertIsNone(current_version._valid_until)
 
     def test_deleteing_instance_should_create_new_version(self):
         original_versions = Person._VersionModel.select()
         self.assertEqual(len(original_versions), 1, 'should begin with one version')
-        self.assertFalse(original_versions[0].deleted)
+        self.assertFalse(original_versions[0]._deleted)
 
         # delete the instance
         self.person.delete_instance()
@@ -92,14 +92,14 @@ class TestVersionedModel(unittest.TestCase):
         versions = Person._VersionModel.select()
         self.assertEqual(len(versions), 2, 'should now have 2 versions')
 
-        # First one should have valid_until == ``NULL`` and deleted == ``True``.
+        # First one should have _valid_until == ``NULL`` and _deleted == ``True``.
         # The second one should not
         null_count = 0
         deleted_count = 0
         for version in versions:
-            if version.valid_until is None:
+            if version._valid_until is None:
                 null_count += 1
-            if version.deleted is True:
+            if version._deleted is True:
                 deleted_count += 1
         self.assertEqual(null_count, 1)
         self.assertEqual(deleted_count, 1)
@@ -112,7 +112,7 @@ class TestVersionedModel(unittest.TestCase):
     def test_update_should_create_new_version(self):
         original_versions = Person._VersionModel.select()
         self.assertEqual(len(original_versions), 1, 'should begin with one version')
-        self.assertFalse(original_versions[0].deleted)
+        self.assertFalse(original_versions[0]._deleted)
 
         # modify the instance
         self.person.name = 'new name'
@@ -122,17 +122,17 @@ class TestVersionedModel(unittest.TestCase):
         versions = Person._VersionModel.select()
         self.assertEqual(len(versions), 2, 'should now have 2 versions')
 
-        # current one should have valid_until == ``NULL``
+        # current one should have _valid_until == ``NULL``
         # the second should have a real date
         null_count = 0
         for version in versions:
-            if version.valid_until is None:
+            if version._valid_until is None:
                 null_count += 1
         self.assertEqual(null_count, 1)
 
         # Check attributes of old version
         old_version = (self.person._versions
-                       .where(Person._VersionModel.valid_until.is_null(False))
+                       .where(Person._VersionModel._valid_until.is_null(False))
                        )[0]
         for key, value in self.person_kwargs.items():
                 self.assertEqual(getattr(old_version, key), value)
@@ -200,6 +200,71 @@ class TestVersionedModel(unittest.TestCase):
         # 1 -> 2 -> 1 -> 2 == 4
         self.assertEqual(self.person.version_id, 4)
 
+    def test_revert_negative_index(self):
+        version_1 = self.person_kwargs
+        version_2 = version_1.copy()
+        version_2['name'] = 'new_name2'
+        version_3 = version_1.copy()
+        version_3['name'] = 'new_name3'
+        version_4 = version_1.copy()
+        version_4['name'] = 'new_name4'
+
+        version_fields = (version_1, version_2, version_3, version_4)
+
+        new_versions = version_fields[1:]
+
+        # first make a change
+        for version in new_versions:
+            for field, value in version.items():
+                setattr(self.person, field, value)
+            self.person.save()
+
+            # make sure the change is saved
+            for field, value in version.items():
+                self.assertEqual(getattr(self.person, field), value)
+
+        # make the reversions and check they match
+        for enum, version_field in enumerate(version_fields):
+            self.person.revert(-3)
+            for field, value in version_field.items():
+                self.assertEqual(getattr(self.person, field), value)
+
+        # check we are actually at version 8
+        # 1 -> 2 -> -> 3 -> 4 -> 1 -> 2 -> 3 -> 4 == 8
+        self.assertEqual(self.person.version_id, 8)
+
+        # try to revert all the way back to version 2
+        self.person.revert(-6)
+        for field, value in version_2.items():
+            self.assertEqual(getattr(self.person, field), value)
+
+
+class School(BaseClass):
+    name = CharField()
+
+
+class Student(BaseClass):
+    name = CharField()
+    school = ForeignKeyField(School, related_name='students')
+
+
+class TestRelations(unittest.TestCase):
+    def setUp(self):
+        School.create_table()
+        Person.create_table()
+
+    def tearDown(self):
+        Person.drop_table()
+
+    def test_basic_relation(self):
+        self.school = School()
+        self.school.name = 'Montessori School'
+        self.school.save()
+
+        self.student = Student()
+        self.student.name = 'Johnny Blue'
+        self.student.school = self.school
+        self.student.save()
 
 
 if __name__ == '__main__':
