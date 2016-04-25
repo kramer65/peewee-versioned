@@ -10,12 +10,12 @@ sqlite_database = SqliteDatabase(':memory:')
 
 
 # Basic example class
-class BaseClass(Model):
+class BaseClass(VersionedModel):
     class Meta:
         database = sqlite_database
 
 
-class Person(BaseClass, VersionedModel):
+class Person(BaseClass):
     name = CharField()
     birthday = DateField()
     is_relative = BooleanField()
@@ -239,11 +239,11 @@ class TestVersionedModel(unittest.TestCase):
             self.assertEqual(getattr(self.person, field), value)
 
 
-class School(BaseClass, VersionedModel):
+class School(BaseClass):
     name = CharField()
 
 
-class Student(BaseClass, VersionedModel):
+class Student(BaseClass):
     name = CharField()
     school = ForeignKeyField(School, related_name='students')
 

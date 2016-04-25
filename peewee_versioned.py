@@ -28,7 +28,7 @@ class MetaModel(BaseModel):
                 name == 'VersionedModel'):  # We don't want versions for the mixin
             VersionModel = BaseModel.__new__(self, name, bases, attrs)
             # Because ``VersionModel`` inherits from the initial class
-            # we need to mask the reference to itself that is inheritied to avoid
+            # we need to mask the reference to itself that is inherited to avoid
             # infinite recursion and for detection
             setattr(VersionModel, self._version_model_attr_name, None)
             return VersionModel
@@ -55,6 +55,7 @@ class MetaModel(BaseModel):
         # Mung up the attributes for our ``VersionModel``
         version_model_attrs = _version_fields.copy()
         version_model_attrs['__qualname__'] = name + self._version_model_name_suffix
+
         # Add ForeignKeyField linking to the original record
         version_model_attrs['_original_record'] = ForeignKeyField(
             new_class, related_name=self._version_model_related_name
@@ -72,11 +73,12 @@ class MetaModel(BaseModel):
         VersionModel = type(name + self._version_model_name_suffix,  # Name
                             (new_class,),  # bases
                             version_model_attrs)  # attributes
+        # Modify the nested ``VersionedModel``
+        setattr(VersionModel, '_version_fields', _version_fields)
 
         # Modify the newly created class before returning
         setattr(new_class, self._version_model_attr_name, VersionModel)
         setattr(new_class, '_version_model_attr_name', self._version_model_attr_name)
-        setattr(new_class, '_version_fields', _version_fields)
 
         return new_class
 
@@ -205,10 +207,11 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
 
     @classmethod
     def _get_fields_to_copy(cls):
-        version_model_fields_dict = cls._get_version_model()._meta.fields
+        VersionModel = cls._get_version_model()
+        version_model_fields_dict = VersionModel._meta.fields
         fields = []
         for key in version_model_fields_dict.keys():
-            if not (key in cls._version_fields or key == '_original_record'):
+            if not (key in VersionModel._version_fields or key == '_original_record_id'):
                 fields.append(key)
         return fields
 
