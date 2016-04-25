@@ -3,7 +3,7 @@ import datetime
 import os
 import inspect
 
-from peewee import CharField, DateField, BooleanField, SqliteDatabase, ForeignKeyField, Model
+from peewee import CharField, DateField, BooleanField, SqliteDatabase, ForeignKeyField
 from peewee_versioned import VersionedModel
 
 sqlite_database = SqliteDatabase(':memory:')
