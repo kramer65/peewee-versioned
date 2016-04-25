@@ -5,7 +5,8 @@ adds a *_versions class and connects it to the proper signals
 import datetime
 
 from six import with_metaclass  # py2 compat
-from peewee import BaseModel, Model, DateTimeField, ForeignKeyField, IntegerField, BooleanField
+from peewee import (BaseModel, Model, DateTimeField, ForeignKeyField, IntegerField, BooleanField,
+                    RelationDescriptor)
 
 
 class MetaModel(BaseModel):
@@ -54,9 +55,16 @@ class MetaModel(BaseModel):
         # Mung up the attributes for our ``VersionModel``
         version_model_attrs = _version_fields.copy()
         version_model_attrs['__qualname__'] = name + self._version_model_name_suffix
+        # Add ForeignKeyField linking to the original record
         version_model_attrs['_original_record'] = ForeignKeyField(
             new_class, related_name=self._version_model_related_name
         )
+
+        # Mask all ``peewee.RelationDescriptor`` fields to avoid related name conflicts
+        for field, value in vars(new_class).items():
+            if isinstance(value, RelationDescriptor):
+                version_model_attrs[field] = None
+
         # needed to avoid infinite recursion
         version_model_attrs['_RECURSION_BREAK_TEST'] = self._RECURSION_BREAK_TEST
 
