@@ -39,13 +39,13 @@ class MetaModel(BaseModel):
                            '_valid_until': DateTimeField(null=True, default=None,),
                            '_deleted': BooleanField(default=False),
                            '_original_record': None,  # ForeignKeyField. Added later.
+                           '_original_record_id': None,  # added later by peewee
                            '_version_id': IntegerField(default=1),
                            '_id': IntegerField(primary_key=True)}  # Make an explicit primary key
 
         # Create the class, create the nested ``VersionModel``, link them together.
         for field in attrs.keys():
-            if (field in _version_fields or
-                    field == '_original_record_id'):  # suffix ``_id`` added by peewee
+            if field in _version_fields:
                 raise ValueError('You can not declare the attribute {}. '
                                  'It is automatically created by VersionedModel'.format(field))
 
@@ -211,7 +211,7 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
         version_model_fields_dict = VersionModel._meta.fields
         fields = []
         for key in version_model_fields_dict.keys():
-            if not (key in VersionModel._version_fields or key == '_original_record_id'):
+            if key not in VersionModel._version_fields:
                 fields.append(key)
         return fields
 
