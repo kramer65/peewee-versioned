@@ -14,15 +14,6 @@ class MetaModel(BaseModel):
 
     The nested subclass is referred to as ``VersionModel``
     '''
-
-    # These fields will be added to the nested ``VersionModel``
-    _version_fields = {'valid_from': DateTimeField(default=datetime.datetime.now, index=True),
-                       'valid_until': DateTimeField(null=True, default=None,),
-                       'deleted': BooleanField(default=False),
-                       '_original_record_id': None,  # ForeignKeyField. Added later.
-                       '_version_id': IntegerField(default=1),
-                       '_id': IntegerField(primary_key=True)}  # Make an explicit primary key
-
     # Attribute of the parent class where the ``VersionModel`` can be accessed: Parent._VersionModel
     _version_model_attr_name = '_VersionModel'
     _version_model_name_suffix = 'Version'  # Example, People -> PeopleVersion
@@ -32,7 +23,8 @@ class MetaModel(BaseModel):
     def __new__(self, name, bases, attrs):
         # Because the nested VersionModel shares this metaclass, we need to
         # test for it and act like :class:`peewee.BaseModel`
-        if attrs.pop('_RECURSION_BREAK_TEST', None):
+        if (attrs.pop('_RECURSION_BREAK_TEST', None) or
+                name == 'VersionedModel'):  # We don't want versions for the mixin
             VersionModel = BaseModel.__new__(self, name, bases, attrs)
             # Because ``VersionModel`` inherits from the initial class
             # we need to mask the reference to itself that is inheritied to avoid
@@ -40,10 +32,19 @@ class MetaModel(BaseModel):
             setattr(VersionModel, self._version_model_attr_name, None)
             return VersionModel
 
+        # Instantiate the fields we want to add
+        # These fields will be added to the nested ``VersionModel``
+        _version_fields = {'valid_from': DateTimeField(default=datetime.datetime.now, index=True),
+                           'valid_until': DateTimeField(null=True, default=None,),
+                           'deleted': BooleanField(default=False),
+                           '_original_record': None,  # ForeignKeyField. Added later.
+                           '_version_id': IntegerField(default=1),
+                           '_id': IntegerField(primary_key=True)}  # Make an explicit primary key
+
         # Create the class, create the nested ``VersionModel``, link them together.
         for field in attrs.keys():
-            if (field in self._version_fields or
-                    field == '_original_record'):  # _id suffix automatically truncated by peewee
+            if (field in _version_fields or
+                    field == '_original_record_id'):  # suffix _id added by peewee
                 raise ValueError('You can not declare the attribute {}. '
                                  'It is automatically created by VersionedModel'.format(field))
 
@@ -51,7 +52,7 @@ class MetaModel(BaseModel):
         new_class = super(MetaModel, self).__new__(self, name, bases, attrs)
 
         # Mung up the attributes for our ``VersionModel``
-        version_model_attrs = self._version_fields.copy()
+        version_model_attrs = _version_fields.copy()
         version_model_attrs['__qualname__'] = name + self._version_model_name_suffix
         version_model_attrs['_original_record'] = ForeignKeyField(
             new_class, related_name=self._version_model_related_name
@@ -67,7 +68,7 @@ class MetaModel(BaseModel):
         # Modify the newly created class before returning
         setattr(new_class, self._version_model_attr_name, VersionModel)
         setattr(new_class, '_version_model_attr_name', self._version_model_attr_name)
-        setattr(new_class, '_version_fields', self._version_fields)
+        setattr(new_class, '_version_fields', _version_fields)
 
         return new_class
 
@@ -185,7 +186,7 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
         else:  # version < 0
             version_model = (self._versions
                              .order_by(VersionModel._version_id.desc())
-                             .offset(-version - 1)
+                             .offset(-version)
                              .limit(1))[0]
 
         fields_to_copy = self._get_fields_to_copy()
