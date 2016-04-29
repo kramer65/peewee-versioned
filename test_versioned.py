@@ -3,7 +3,7 @@ import datetime
 import os
 import inspect
 
-from peewee import CharField, DateField, BooleanField, ForeignKeyField, SqliteDatabase
+from peewee import CharField, DateField, BooleanField, SqliteDatabase, ForeignKeyField
 from peewee_versioned import VersionedModel
 
 sqlite_database = SqliteDatabase(':memory:')
@@ -224,13 +224,13 @@ class TestVersionedModel(unittest.TestCase):
                 self.assertEqual(getattr(self.person, field), value)
 
         # make the reversions and check they match
-        for enum, version_field in enumerate(version_fields):
+        for version_field in version_fields:
             self.person.revert(-3)
             for field, value in version_field.items():
                 self.assertEqual(getattr(self.person, field), value)
 
         # check we are actually at version 8
-        # 1 -> 2 -> -> 3 -> 4 -> 1 -> 2 -> 3 -> 4 == 8
+        # 1 -> 2 -> 3 -> 4 -> 1 -> 2 -> 3 -> 4 == 8
         self.assertEqual(self.person.version_id, 8)
 
         # try to revert all the way back to version 2
@@ -251,10 +251,11 @@ class Student(BaseClass):
 class TestRelations(unittest.TestCase):
     def setUp(self):
         School.create_table()
-        Person.create_table()
+        Student.create_table()
 
     def tearDown(self):
-        Person.drop_table()
+        School.drop_table()
+        Student.drop_table()
 
     def test_basic_relation(self):
         self.school = School()
@@ -265,6 +266,15 @@ class TestRelations(unittest.TestCase):
         self.student.name = 'Johnny Blue'
         self.student.school = self.school
         self.student.save()
+
+        self.student2 = Student()
+        self.student2.name = 'Johnny Blue2'
+        self.student2.school = self.school
+        self.student2.save()
+
+        self.assertEqual(len(self.school.students), 2, 'Should have 2 students')
+        self.assertEqual(self.student.school, self.school)
+        self.assertEqual(self.student2.school, self.school)
 
 
 if __name__ == '__main__':
