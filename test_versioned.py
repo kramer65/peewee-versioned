@@ -3,16 +3,21 @@ import datetime
 import os
 import inspect
 
-from peewee import CharField, DateField, BooleanField, SqliteDatabase, ForeignKeyField
+from peewee import CharField, DateField, BooleanField, ForeignKeyField, SqliteDatabase
+from playhouse.db_url import connect
+
 from peewee_versioned import VersionedModel
 
-sqlite_database = SqliteDatabase(':memory:')
+if os.environ.get('DATABASE'):
+    database = connect(os.environ.get('DATABASE'))
+else:
+    database = SqliteDatabase(':memory:')
 
 
 # Basic example class
 class BaseClass(VersionedModel):
     class Meta:
-        database = sqlite_database
+        database = database
 
 
 class Person(BaseClass):
@@ -254,8 +259,8 @@ class TestRelations(unittest.TestCase):
         Student.create_table()
 
     def tearDown(self):
-        School.drop_table()
-        Student.drop_table()
+        # need to cascade due to the foreign key
+        database.drop_tables([School, Student])
 
     def test_basic_relation(self):
         self.school = School()

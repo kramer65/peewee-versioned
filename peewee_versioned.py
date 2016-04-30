@@ -6,7 +6,7 @@ import datetime
 
 from six import with_metaclass  # py2 compat
 from peewee import (BaseModel, Model, DateTimeField, ForeignKeyField, IntegerField, BooleanField,
-                    RelationDescriptor)
+                    PrimaryKeyField, RelationDescriptor)
 
 
 class MetaModel(BaseModel):
@@ -41,7 +41,7 @@ class MetaModel(BaseModel):
                            '_original_record': None,  # ForeignKeyField. Added later.
                            '_original_record_id': None,  # added later by peewee
                            '_version_id': IntegerField(default=1),
-                           '_id': IntegerField(primary_key=True)}  # Make an explicit primary key
+                           '_id': PrimaryKeyField(primary_key=True)}  # Make an explicit primary key
 
         # Create the class, create the nested ``VersionModel``, link them together.
         for field in attrs.keys():
@@ -58,7 +58,8 @@ class MetaModel(BaseModel):
 
         # Add ForeignKeyField linking to the original record
         version_model_attrs['_original_record'] = ForeignKeyField(
-            new_class, related_name=self._version_model_related_name
+            new_class, related_name=self._version_model_related_name, 
+            null=True, on_delete="SET NULL"
         )
 
         # Mask all ``peewee.RelationDescriptor`` fields to avoid related name conflicts
@@ -123,23 +124,20 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
             self._create_new_version()
 
     def delete_instance(self, *args, **kwargs):
-        # default behaviour if this is a ``VersionModel``
-        if self._is_version_model():
-            return super(VersionedModel, self).delete_instance(*args, **kwargs)
-
-        # wrap everything in a transaction: all or none
-        with self._meta.database.atomic():
-
-            # finalize the previous version
-            self._finalize_current_version()
-
-            # create a new version initialized to current values
-            new_version = self._create_new_version(save=False)
-            new_version._deleted = True
-            new_version.save()
-
-            # delete the parent
-            super(VersionedModel, self).delete_instance(*args, **kwargs)
+        if not self._is_version_model():
+            # wrap everything in a transaction: all or none
+            with self._meta.database.atomic():
+    
+                # finalize the previous version
+                self._finalize_current_version()
+    
+                # create a new version initialized to current values
+                new_version = self._create_new_version(save=False)
+                new_version._deleted = True
+                new_version.save()
+            
+        # default behaviour
+        return super(VersionedModel, self).delete_instance(*args, **kwargs)
 
     @classmethod
     def create_table(cls, *args, **kwargs):
@@ -153,12 +151,14 @@ class VersionedModel(with_metaclass(MetaModel, Model)):
 
     @classmethod
     def drop_table(cls, *args, **kwargs):
-        # create the normal table schema
-        super(VersionedModel, cls).drop_table(*args, **kwargs)
-        # Create the tables for the nested version model. skip if it is the nested version model
+        # drop the nested ``VersionModel`` table first
         if not cls._is_version_model():
             version_model = getattr(cls, cls._version_model_attr_name, None)
             version_model.drop_table(*args, **kwargs)
+            
+        # default behaviour
+        super(VersionedModel, cls).drop_table(*args, **kwargs)
+        
 
     @property
     def version_id(self):
