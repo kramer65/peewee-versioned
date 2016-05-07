@@ -5,12 +5,13 @@ import inspect
 
 from peewee import CharField, DateField, BooleanField, ForeignKeyField, SqliteDatabase
 from playhouse.db_url import connect
-from playhouse.migrate import SqliteMigrator, migrate
 
-from .peewee_versioned import VersionedModel
+from . import VersionedModel
 
-if os.environ.get('DATABASE'):
-    database = connect(os.environ.get('DATABASE'))
+database_url = os.environ.get('DATABASE', None)
+if database_url:
+    database = connect(database_url)
+    
 else:
     database = SqliteDatabase(':memory:')
 
@@ -281,30 +282,6 @@ class TestRelations(unittest.TestCase):
         self.assertEqual(len(self.school.students), 2, 'Should have 2 students')
         self.assertEqual(self.student.school, self.school)
         self.assertEqual(self.student2.school, self.school)
-
-
-class Food(BaseClass):
-    name = CharField()
-    is_tasty = BooleanField()
-
-
-class TestMigrations(unittest.TestCase):
-    def setUp(self):
-        Food.create_table()
-        self.migrator = SqliteMigrator(database)
-
-    def tearDown(self):
-        Food.drop_table()
-
-    def test_add_column(self):
-        Food.another_column = CharField(null=True)
-        migrate(self.migrator.add_column('food', 'another_column', Food.another_column))
-        # TODO: How to test if another_column now actually exists in both the `food` table as the `foodversioned` table?
-
-    def test_drop_column(self):
-        del Food.is_tasty
-        migrate(self.migrator.drop_column('food', 'is_tasty'))
-        # TODO: How to test if `is_tasty` has actually been dropped from both the `food` table as the `foodversioned` table?
 
 
 
