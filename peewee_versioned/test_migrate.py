@@ -4,9 +4,10 @@ import unittest
 from peewee import CharField, DateField, BooleanField, ForeignKeyField, SqliteDatabase
 
 from playhouse.db_url import connect
-from playhouse.migrate import SqliteMigrator, MySQLMigrator, PostgresqlMigrator, migrate
+from playhouse.migrate import SqliteMigrator, MySQLMigrator, PostgresqlMigrator
 
 from . import VersionedModel
+from . import migrate
 
 
 database_url = os.environ.get('DATABASE', None)
