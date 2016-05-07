@@ -7,7 +7,7 @@ from peewee import CharField, DateField, BooleanField, ForeignKeyField, SqliteDa
 from playhouse.db_url import connect
 from playhouse.migrate import SqliteMigrator, migrate
 
-from peewee_versioned import VersionedModel
+from .peewee_versioned import VersionedModel
 
 if os.environ.get('DATABASE'):
     database = connect(os.environ.get('DATABASE'))

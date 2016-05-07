@@ -1,0 +1,1 @@
+from .peewee_versioned import VersionedModel
