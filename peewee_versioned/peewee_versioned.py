@@ -35,12 +35,12 @@ class MetaModel(BaseModel):
 
         # Instantiate the fields we want to add
         # These fields will be added to the nested ``VersionModel``
-        _version_fields = {'_valid_from': DateTimeField(default=datetime.datetime.now, index=True),
+        _version_fields = {'_valid_from': DateTimeField(default=datetime.datetime.now),
                            '_valid_until': DateTimeField(null=True, default=None,),
                            '_deleted': BooleanField(default=False),
                            '_original_record': None,  # ForeignKeyField. Added later.
                            '_original_record_id': None,  # added later by peewee
-                           '_version_id': IntegerField(default=1),
+                           '_version_id': IntegerField(default=1, index=True),
                            '_id': PrimaryKeyField(primary_key=True)}  # Make an explicit primary key
 
         # Create the class, create the nested ``VersionModel``, link them together.

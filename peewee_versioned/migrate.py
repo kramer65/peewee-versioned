@@ -1,6 +1,6 @@
 from copy import copy
 
-from peewee import RelationDescriptor
+from peewee import ForeignKeyField
 
 from playhouse.migrate import Operation
 from playhouse.reflection import Introspector
@@ -13,6 +13,56 @@ NOOP_OPERATIONS = {
 }
 
 
+def _rename_table(operation, migrator, introspector, old_name, new_name):
+    version_old_name = old_name + 'version'
+    version_new_name = new_name + 'version'
+    
+    # save all of the foreign key references
+    models = introspector.generate_models()
+    OldVersion = models[version_old_name]
+    
+    # The name of the original record's primary key
+    to_field_name = OldVersion._original_record.to_field.name
+    
+    version_id__original_id = []
+    for version in OldVersion.select(OldVersion._id, OldVersion._original_record):
+        version_id__original_id.append((version._id, version._original_record_id))
+        
+    # drop the foreign key field in the OldVersion model
+    drop_field = Operation(migrator, 'drop_column', version_old_name, '_original_record_id')
+    drop_field.run()
+    
+    # rename the original table
+    operation.run()
+    # rename the version table
+    version_rename_table = Operation(migrator, 'rename_table', version_old_name, version_new_name)
+    version_rename_table.run()
+    
+    # lookup the new model so we can add a foreign key to it
+    models = introspector.generate_models()
+    NewModel = models[new_name]
+    
+    # Add a new Foregin key reference
+    _original_record = ForeignKeyField(
+        NewModel, null=True, on_delete="SET NULL",
+        to_field=getattr(NewModel, to_field_name)
+    )
+    add_foregin_key = Operation(migrator, 'add_column', version_new_name, '_original_record_id', _original_record)
+    add_foregin_key.run()
+    
+    # load the new version model with the foregin key
+    models = introspector.generate_models()
+    NewModel = models[new_name]
+    NewVersionModel = models[version_new_name]
+    
+    # re link all versions
+    for _id, _original_record_id in version_id__original_id:
+        version = NewVersionModel.get(NewVersionModel._id == _id)
+        # ``to_field_name`` is the name of the original record's primary key
+        model = NewModel.get(getattr(NewModel, to_field_name) == _original_record_id)
+        version._original_record = model
+        version.save() 
+
 
 def migrate(*operations, **kwargs):
     '''
@@ -22,7 +72,6 @@ def migrate(*operations, **kwargs):
     '''
     
     # Collect nested classes
-    databases_models_map = {}
     for operation in operations:
         migrator = operation.migrator
         database = operation.migrator.database
@@ -36,8 +85,11 @@ def migrate(*operations, **kwargs):
             continue
         
         # potential arguments to be used with the nested class
-        version_args = args.copy()
+        version_args = copy(args)
         version_kwargs = kwargs.copy()
+        
+        # potential operation to run on the nested class
+        version_operation = None
         
         # Get the table name of the operation
         # Update version args/kwargs
@@ -54,11 +106,8 @@ def migrate(*operations, **kwargs):
             version_args[0] = table + 'version'
         
         # Read models from the database and cache
-        models = databases_models_map.get(database, None)
-        if models is None:
-            introspector = Introspector.from_database(database)
-            models = introspector.generate_models(skip_invalid=True)
-            databases_models_map[database] = models
+        introspector = Introspector.from_database(database)
+        models = introspector.generate_models(skip_invalid=True)
         
         # Test if the model has a version model associated with it
         version_name = table + 'version'
@@ -72,7 +121,7 @@ def migrate(*operations, **kwargs):
                 field = kwargs.get('field', None)
                 if field is None:
                     field = args[2]
-                if isinstance(field, RelationDescriptor):
+                if isinstance(field, ForeignKeyField):
                     operation.run()
                     continue
             elif method == 'drop_column':
@@ -97,17 +146,22 @@ def migrate(*operations, **kwargs):
                     operation.run()
                     continue
             elif method == 'rename_table':
+                old_name = kwargs.get('old_name', None)
+                if old_name is None:
+                    old_name = args[0]
                 new_name = kwargs.get('new_name', None)
-                if new_name is not None:
-                    version_kwargs['new_name'] = new_name + 'version'
-                else:
-                    version_args[1] = new_name + 'version'
+                if new_name is None:
+                    new_name = version_args[1]
+                
+                _rename_table(operation, migrator, introspector, old_name, new_name)
+                continue
+                
                     
             # I guess we have a valid operation, so we will create and run it for the nested verion model
             version_operation = Operation(migrator, method, *version_args, **version_kwargs)
-            version_operation.run()
+            
         
-        # Run the original operation too!
+        # Run the operations
         operation.run()
-
-
+        if version_operation is not None:
+            version_operation.run()

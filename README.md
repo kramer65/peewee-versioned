@@ -185,6 +185,34 @@ Now that the person is gone, we need to go through the Person class to get the v
 As you can see also the action of deleting a record is stored. So all the actions of `CREATE`, `UPDATE` and `DELETE` are stored and can be retreived.
 
 
+## Migrations
+
+There is support for using the [playouse Schema Migrations extension](http://docs.peewee-orm.com/en/latest/peewee/playhouse.html#schema-migrations). 
+In order to use the migrations, you need to import the migrate function from peewee_versioned.
+
+### Migration Example
+	
+```python
+from peewee import CharField, IntegerField, SqliteDatabase
+from playhouse.migrate import SqliteMigrator
+# Must import migrate from `peewee_versioned`
+from peewee_versioned import migrate
+
+# SQLite example:
+my_db = SqliteDatabase('my_database.db')
+migrator = SqliteMigrator(my_db)
+
+title_field = CharField(default='')
+status_field = IntegerField(null=True)
+
+migrate(
+    migrator.add_column('some_table', 'title', title_field),
+    migrator.add_column('some_table', 'status', status_field),
+    migrator.drop_column('some_table', 'old_column'),
+)
+
+```
+
 ## Installation
 
 	python setup.py install
