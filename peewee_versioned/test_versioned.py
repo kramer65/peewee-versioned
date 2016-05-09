@@ -5,18 +5,20 @@ import inspect
 
 from peewee import CharField, DateField, BooleanField, ForeignKeyField, SqliteDatabase
 from playhouse.db_url import connect
-from playhouse.migrate import SqliteMigrator, migrate
 
-from peewee_versioned import VersionedModel
+from . import VersionedModel
 
-if os.environ.get('DATABASE'):
-    database = connect(os.environ.get('DATABASE'))
+database_url = os.environ.get('DATABASE', None)
+if database_url:
+    database = connect(database_url)
+
 else:
     database = SqliteDatabase(':memory:')
 
 
 # Basic example class
 class BaseClass(VersionedModel):
+
     class Meta:
         database = database
 
@@ -45,7 +47,8 @@ class TestVersionedModel(unittest.TestCase):
         self.assertEqual(loaded_person, self.person)
         for key, value in self.person_kwargs.items():
             self.assertEqual(value, getattr(loaded_person, key))
-            self.assertEqual(getattr(self.person, key), getattr(loaded_person, key))
+            self.assertEqual(
+                getattr(self.person, key), getattr(loaded_person, key))
 
     def test_should_update_as_normal_model(self):
         self.person.is_relative = False  # toggle
@@ -66,7 +69,8 @@ class TestVersionedModel(unittest.TestCase):
         self.assertFalse(os.path.exists('peewee.db'))
 
     def test_should_create_nested_version_models(self):
-        self.assertTrue(hasattr(Person, '_VersionModel'), 'Should have a _version_model attribute')
+        self.assertTrue(
+            hasattr(Person, '_VersionModel'), 'Should have a _version_model attribute')
         self.assertTrue(issubclass(Person._VersionModel, Person))
 
     def test_should_not_infinitely_recurse_when_creating_nested_version_models(self):
@@ -88,7 +92,8 @@ class TestVersionedModel(unittest.TestCase):
 
     def test_deleteing_instance_should_create_new_version(self):
         original_versions = Person._VersionModel.select()
-        self.assertEqual(len(original_versions), 1, 'should begin with one version')
+        self.assertEqual(
+            len(original_versions), 1, 'should begin with one version')
         self.assertFalse(original_versions[0]._deleted)
 
         # delete the instance
@@ -117,7 +122,8 @@ class TestVersionedModel(unittest.TestCase):
 
     def test_update_should_create_new_version(self):
         original_versions = Person._VersionModel.select()
-        self.assertEqual(len(original_versions), 1, 'should begin with one version')
+        self.assertEqual(
+            len(original_versions), 1, 'should begin with one version')
         self.assertFalse(original_versions[0]._deleted)
 
         # modify the instance
@@ -141,12 +147,13 @@ class TestVersionedModel(unittest.TestCase):
                        .where(Person._VersionModel._valid_until.is_null(False))
                        )[0]
         for key, value in self.person_kwargs.items():
-                self.assertEqual(getattr(old_version, key), value)
+            self.assertEqual(getattr(old_version, key), value)
 
         # Check attributes of current version
         current_version = self.person._get_current_version()
         for key in self.person_kwargs.keys():
-                self.assertEqual(getattr(current_version, key), getattr(self.person, key))
+            self.assertEqual(
+                getattr(current_version, key), getattr(self.person, key))
 
     def test_create_new_record_with_save_should_create_version(self):
         new_person = Person()
@@ -164,7 +171,8 @@ class TestVersionedModel(unittest.TestCase):
         self.assertEqual(self.person.version_id, 1)
 
     def test_version_id_shold_increment(self):
-        test_versions_names = ((num, str(num)) for num in range(2, 100))  # (2, '2'), (3, '3')...
+        # (2, '2'), (3, '3')...
+        test_versions_names = ((num, str(num)) for num in range(2, 100))
         for version, name in test_versions_names:
             self.person.name = name
             self.person.save()
@@ -255,6 +263,7 @@ class Student(BaseClass):
 
 
 class TestRelations(unittest.TestCase):
+
     def setUp(self):
         School.create_table()
         Student.create_table()
@@ -278,34 +287,10 @@ class TestRelations(unittest.TestCase):
         self.student2.school = self.school
         self.student2.save()
 
-        self.assertEqual(len(self.school.students), 2, 'Should have 2 students')
+        self.assertEqual(
+            len(self.school.students), 2, 'Should have 2 students')
         self.assertEqual(self.student.school, self.school)
         self.assertEqual(self.student2.school, self.school)
-
-
-class Food(BaseClass):
-    name = CharField()
-    is_tasty = BooleanField()
-
-
-class TestMigrations(unittest.TestCase):
-    def setUp(self):
-        Food.create_table()
-        self.migrator = SqliteMigrator(database)
-
-    def tearDown(self):
-        Food.drop_table()
-
-    def test_add_column(self):
-        Food.another_column = CharField(null=True)
-        migrate(self.migrator.add_column('food', 'another_column', Food.another_column))
-        # TODO: How to test if another_column now actually exists in both the `food` table as the `foodversioned` table?
-
-    def test_drop_column(self):
-        del Food.is_tasty
-        migrate(self.migrator.drop_column('food', 'is_tasty'))
-        # TODO: How to test if `is_tasty` has actually been dropped from both the `food` table as the `foodversioned` table?
-
 
 
 if __name__ == '__main__':
